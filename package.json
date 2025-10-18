@@ -1,0 +1,27 @@
+{
+  "name": "zhi-talk-node",
+  "version": "1.0.0",
+  "description": "使用 Node.js 调用 DeepSeek API 的流式输出示例项目",
+  "type": "module",
+  "main": "src/stream-demo-trae.js",
+  "scripts": {
+    "start": "node src/stream-demo-trae.js",
+    "dev": "node --watch src/stream-demo-trae.js"
+  },
+  "keywords": [
+    "nodejs",
+    "deepseek",
+    "api",
+    "stream",
+    "openai"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "openai": "^4.67.3"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
