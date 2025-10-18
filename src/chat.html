@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>AI 聊天 Demo</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background-color: #f5f5f5;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .chat-container {
+        max-width: 800px;
+        margin: 0 auto;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        background: white;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+
+      .chat-header {
+        background: #007bff;
+        color: white;
+        padding: 15px 20px;
+        text-align: center;
+        font-size: 18px;
+        font-weight: 500;
+      }
+
+      .chat-messages {
+        flex: 1;
+        padding: 20px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+      }
+
+      .message {
+        max-width: 70%;
+        padding: 12px 16px;
+        border-radius: 18px;
+        word-wrap: break-word;
+        line-height: 1.4;
+      }
+
+      .message.user {
+        align-self: flex-end;
+        background: #007bff;
+        color: white;
+      }
+
+      .message.assistant {
+        align-self: flex-start;
+        background: #e9ecef;
+        color: #333;
+        border: 1px solid #dee2e6;
+      }
+
+      .message.loading {
+        align-self: flex-start;
+        background: #f8f9fa;
+        color: #6c757d;
+        font-style: italic;
+        border: 1px solid #dee2e6;
+      }
+
+      .input-area {
+        padding: 20px;
+        border-top: 1px solid #dee2e6;
+        background: white;
+      }
+
+      .input-container {
+        display: flex;
+        gap: 10px;
+        align-items: flex-end;
+      }
+
+      #messageInput {
+        flex: 1;
+        min-height: 40px;
+        max-height: 120px;
+        padding: 10px 15px;
+        border: 2px solid #dee2e6;
+        border-radius: 20px;
+        resize: none;
+        font-family: inherit;
+        font-size: 14px;
+        outline: none;
+        transition: border-color 0.2s;
+      }
+
+      #messageInput:focus {
+        border-color: #007bff;
+      }
+
+      #sendButton {
+        padding: 10px 20px;
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 20px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: background-color 0.2s;
+        min-width: 60px;
+      }
+
+      #sendButton:hover:not(:disabled) {
+        background: #0056b3;
+      }
+
+      #sendButton:disabled {
+        background: #6c757d;
+        cursor: not-allowed;
+      }
+
+      .typing-indicator {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #6c757d;
+        animation: typing 1.4s infinite ease-in-out;
+      }
+
+      .typing-indicator:nth-child(1) {
+        animation-delay: -0.32s;
+      }
+      .typing-indicator:nth-child(2) {
+        animation-delay: -0.16s;
+      }
+
+      @keyframes typing {
+        0%,
+        80%,
+        100% {
+          transform: scale(0);
+          opacity: 0.5;
+        }
+        40% {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+
+      /* 滚动条样式 */
+      .chat-messages::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .chat-messages::-webkit-scrollbar-track {
+        background: #f1f1f1;
+      }
+
+      .chat-messages::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 3px;
+      }
+
+      .chat-messages::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="chat-container">
+      <div class="chat-header">AI 聊天助手</div>
+
+      <div
+        class="chat-messages"
+        id="chatMessages"
+      >
+        <div class="message assistant">你好！我是 AI 助手，有什么可以帮助你的吗？</div>
+      </div>
+
+      <div class="input-area">
+        <div class="input-container">
+          <textarea
+            id="messageInput"
+            placeholder="输入你的消息..."
+            rows="1"
+          ></textarea>
+          <button id="sendButton">发送</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      /**
+       * 聊天应用主类
+       */
+      class ChatApp {
+        constructor() {
+          this.chatMessages = document.getElementById("chatMessages");
+          this.messageInput = document.getElementById("messageInput");
+          this.sendButton = document.getElementById("sendButton");
+          this.isLoading = false;
+
+          this.initEventListeners();
+        }
+
+        /**
+         * 初始化事件监听器
+         */
+        initEventListeners() {
+          // 发送按钮点击事件
+          this.sendButton.addEventListener("click", () => {
+            this.sendMessage();
+          });
+
+          // 输入框回车事件（Shift+Enter 换行，Enter 发送）
+          this.messageInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              this.sendMessage();
+            }
+          });
+
+          // 输入框自动调整高度
+          this.messageInput.addEventListener("input", () => {
+            this.autoResizeTextarea();
+          });
+        }
+
+        /**
+         * 自动调整 textarea 高度
+         */
+        autoResizeTextarea() {
+          this.messageInput.style.height = "auto";
+          this.messageInput.style.height = Math.min(this.messageInput.scrollHeight, 120) + "px";
+        }
+
+        /**
+         * 发送消息
+         */
+        async sendMessage() {
+          const message = this.messageInput.value.trim();
+          if (!message || this.isLoading) return;
+
+          // 显示用户消息
+          this.addMessage(message, "user");
+
+          // 清空输入框
+          this.messageInput.value = "";
+          this.autoResizeTextarea();
+
+          // 设置加载状态
+          this.setLoading(true);
+
+          // 显示加载消息
+          const loadingMessage = this.addMessage("正在思考中...", "loading");
+
+          try {
+            // 发送请求到服务器
+            await this.sendToServer(message, loadingMessage);
+          } catch (error) {
+            console.error("发送消息失败:", error);
+            this.removeMessage(loadingMessage);
+            this.addMessage("抱歉，发送消息时出现错误，请稍后重试。", "assistant");
+          } finally {
+            this.setLoading(false);
+          }
+        }
+
+        /**
+         * 向服务器发送消息并处理 SSE 响应
+         * @param {string} message - 用户消息
+         * @param {HTMLElement} loadingMessage - 加载消息元素
+         */
+        async sendToServer(message, loadingMessage) {
+          const response = await fetch("/api/chat", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ message }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+
+          // 移除加载消息
+          this.removeMessage(loadingMessage);
+
+          // 创建助手消息元素
+          const assistantMessage = this.addMessage("", "assistant");
+
+          // 处理 SSE 流式响应
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split("\n");
+              buffer = lines.pop(); // 保留最后一个不完整的行
+
+              for (const line of lines) {
+                if (line.startsWith("data: ")) {
+                  const data = line.slice(6);
+                  if (data === "[DONE]") {
+                    return;
+                  }
+
+                  try {
+                    const parsed = JSON.parse(data);
+                    if (parsed.content) {
+                      this.appendToMessage(assistantMessage, parsed.content);
+                    }
+                  } catch (e) {
+                    console.warn("解析 SSE 数据失败:", e);
+                  }
+                }
+              }
+            }
+          } finally {
+            reader.releaseLock();
+          }
+        }
+
+        /**
+         * 添加消息到聊天区域
+         * @param {string} content - 消息内容
+         * @param {string} type - 消息类型 ('user', 'assistant', 'loading')
+         * @returns {HTMLElement} 消息元素
+         */
+        addMessage(content, type) {
+          const messageDiv = document.createElement("div");
+          messageDiv.className = `message ${type}`;
+          messageDiv.textContent = content;
+
+          this.chatMessages.appendChild(messageDiv);
+          this.scrollToBottom();
+
+          return messageDiv;
+        }
+
+        /**
+         * 向现有消息追加内容
+         * @param {HTMLElement} messageElement - 消息元素
+         * @param {string} content - 要追加的内容
+         */
+        appendToMessage(messageElement, content) {
+          messageElement.textContent += content;
+          this.scrollToBottom();
+        }
+
+        /**
+         * 移除消息元素
+         * @param {HTMLElement} messageElement - 要移除的消息元素
+         */
+        removeMessage(messageElement) {
+          if (messageElement && messageElement.parentNode) {
+            messageElement.parentNode.removeChild(messageElement);
+          }
+        }
+
+        /**
+         * 滚动到底部
+         */
+        scrollToBottom() {
+          this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+        }
+
+        /**
+         * 设置加载状态
+         * @param {boolean} loading - 是否加载中
+         */
+        setLoading(loading) {
+          this.isLoading = loading;
+          this.sendButton.disabled = loading;
+          this.messageInput.disabled = loading;
+
+          if (loading) {
+            this.sendButton.textContent = "发送中...";
+          } else {
+            this.sendButton.textContent = "发送";
+          }
+        }
+      }
+
+      // 页面加载完成后初始化聊天应用
+      document.addEventListener("DOMContentLoaded", () => {
+        new ChatApp();
+      });
+    </script>
+  </body>
+</html>
